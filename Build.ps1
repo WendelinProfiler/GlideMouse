@@ -17,14 +17,15 @@ if ($Compiler) {
         $exe=Join-Path $out ('Test'+$test+'.exe');& $Compiler @common (Join-Path $root ('tests\Test'+$test+'.cpp')) -o $exe @libraries;if($LASTEXITCODE){throw "Test build failed: $test"};& $exe;if($LASTEXITCODE){throw "Test failed: $test"}
     }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests\TestInstaller.ps1');if($LASTEXITCODE){throw 'Installer tests failed'}
-    $csc=Join-Path $env:windir 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-    & $csc /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll ('/win32manifest:'+(Join-Path $root 'installer\setup.manifest')) ('/out:'+(Join-Path $out 'GlideMouseSetup.exe')) (Join-Path $root 'installer\Setup.cs')
-    if($LASTEXITCODE){throw 'Wizard build failed'}
 } else {
     & cmake -S $root -B (Join-Path $root 'build') -A x64;if($LASTEXITCODE){throw 'CMake configuration failed'}
     & cmake --build (Join-Path $root 'build') --config Release;if($LASTEXITCODE){throw 'Build failed'}
     & ctest --test-dir (Join-Path $root 'build') -C Release --output-on-failure;if($LASTEXITCODE){throw 'Tests failed'}
     $out=Join-Path $root 'build\Release'
 }
+    $csc=Join-Path $env:windir 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    & $csc /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll ('/win32manifest:'+(Join-Path $root 'installer\setup.manifest')) ('/out:'+(Join-Path $out 'GlideMouseSetup.exe')) (Join-Path $root 'installer\Setup.cs')
+    if($LASTEXITCODE){throw 'Wizard build failed'}
+
 if($Package){& (Join-Path $root 'New-Release.ps1') -BinaryDir $out}
 

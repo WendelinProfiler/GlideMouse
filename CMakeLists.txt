@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.24)
 project(GlideMouse VERSION 0.1.0 LANGUAGES CXX)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "GlideMouse currently supports Windows x64 only")
@@ -48,10 +48,3 @@ add_executable(TestWindowsSettings tests/TestWindowsSettings.cpp)
 target_link_libraries(TestWindowsSettings PRIVATE advapi32 shell32 cfgmgr32)
 add_test(NAME WindowsSettings COMMAND TestWindowsSettings)
 add_test(NAME Installer COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/tests/TestInstaller.ps1)
-set(CSC "$ENV{WINDIR}/Microsoft.NET/Framework64/v4.0.30319/csc.exe")
-add_custom_target(Setup ALL
-  COMMAND "${CSC}" /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+
-  /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll
-  /win32manifest:${CMAKE_CURRENT_SOURCE_DIR}/installer/setup.manifest
-  /out:$<TARGET_FILE_DIR:IslandMagicInput>/GlideMouseSetup.exe ${CMAKE_CURRENT_SOURCE_DIR}/installer/Setup.cs
-  VERBATIM)
