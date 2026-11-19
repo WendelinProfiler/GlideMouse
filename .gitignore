@@ -1,0 +1,13 @@
+/build/
+/dist/
+/.vs/
+*.user
+*.log
+*.pdb
+*.obj
+*.exe
+*.sys
+*.etl
+*.pcap*
+*.7z
+*.zip

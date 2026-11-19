@@ -1,0 +1,22 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        shell: pwsh
+        run: ./Build.ps1
+      - name: Keep preview binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlideMouse-preview-x64
+          path: build/Release/*.exe
+          retention-days: 7

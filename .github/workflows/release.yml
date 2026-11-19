@@ -1,0 +1,20 @@
+name: Release alpha
+on:
+  push:
+    tags: ['v0.1.0-alpha']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, test and package
+        shell: pwsh
+        run: ./Build.ps1 -Package
+      - name: Publish prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME dist/GlideMouse-0.1.0-alpha-win-x64.zip --prerelease --title "GlideMouse 0.1.0 alpha" --notes "First community preview. Read README requirements before installing. Apple driver not bundled. Generalized clean-machine installation and wider adapter compatibility still need testing."
