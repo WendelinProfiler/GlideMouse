@@ -1,4 +1,4 @@
-﻿param([switch]$Plan,[string]$MouseAddress,[string]$UserSid,[string]$UserHome,[string]$AppleDriver)
+param([switch]$Plan,[string]$MouseAddress,[string]$UserSid,[string]$UserHome,[string]$AppleDriver)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Discover.ps1')
 if ($Plan) { ConvertTo-Json -InputObject @(Get-GlideMouseDevices) -Depth 4 -Compress; exit 0 }
@@ -70,12 +70,21 @@ $state=[ordered]@{Version=2;ApplePackageInstalled=$false;OriginalDriverInf=$devi
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 function Save-State { $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $journal -Encoding UTF8 }
 Save-State
+$state.NativeMouseFilterChanges=@()
 try {
     New-Item -ItemType Directory -Path $target -Force | Out-Null
     # Program Files inherits admin-only write access; never install an elevated
     # service into a user-writable directory.
     foreach ($file in 'IslandMagicInput.exe','IslandMagicUsbBridge.exe','GlideMouseConnection.exe','GlideMouseDriverSetup.exe') { Copy-Item -LiteralPath (Join-Path $root "bin\$file") -Destination (Join-Path $target $file) }
     Copy-Item -LiteralPath (Join-Path $root "bin\MagicMouse-animation.png") -Destination $target
+    foreach($twin in @(Get-NativeMouseTwins $device)) {
+        $old=@(Filters ('HKLM:\SYSTEM\CurrentControlSet\Enum\'+$twin) 'LowerFilters')
+        if($old -notcontains 'applewirelessmouse'){continue}
+        $state.NativeMouseFilterChanges+=@{Instance=$twin;HadAppleFilter=$true}
+        Save-State
+        & (Join-Path $target 'GlideMouseDriverSetup.exe') $twin --remove-native-filter
+        if($LASTEXITCODE){throw 'Could not prepare the hidden native mouse twin for Podglow. Installation stopped.'}
+    }
     Copy-Item -LiteralPath $PSScriptRoot -Destination (Join-Path $target 'installer') -Recurse
     if (!$usbExists) { Copy-Item -LiteralPath $usbSource -Destination $usbDest;$state.UsbFileCreated=$true;Save-State }
     if (!(Get-Service USBPcap -ErrorAction SilentlyContinue)) { & sc.exe create USBPcap type= kernel start= demand error= normal binPath= '\SystemRoot\System32\drivers\USBPcap.sys' | Out-Null;if ($LASTEXITCODE) { throw 'USBPcap service creation failed.' };$state.UsbServiceCreated=$true;Save-State }
@@ -116,7 +125,7 @@ try {
     $uninstall='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\GlideMouse'
     New-Item $uninstall -Force | Out-Null
     New-ItemProperty $uninstall DisplayName -Value 'GlideMouse' -Force | Out-Null
-    New-ItemProperty $uninstall DisplayVersion -Value '0.1.0-alpha' -Force | Out-Null
+    New-ItemProperty $uninstall DisplayVersion -Value '0.1.1-alpha.1' -Force | Out-Null
     New-ItemProperty $uninstall UninstallString -Value ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $target 'installer\Uninstall.ps1')+'"') -Force | Out-Null
     $state.Stage='RestartRequired';Save-State
     'Installed. Restart Windows when your work is saved. Test mode and Secure Boot were not changed.'

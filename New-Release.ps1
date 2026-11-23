@@ -1,4 +1,4 @@
-﻿param([string]$BinaryDir=(Join-Path $PSScriptRoot 'build\Release'))
+param([string]$BinaryDir=(Join-Path $PSScriptRoot 'build\Release'),[string]$Version='0.1.1-alpha.1')
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot;$cache=Join-Path $root 'build\dependency-cache'
 New-Item -ItemType Directory $cache -Force | Out-Null
@@ -17,7 +17,7 @@ if((Get-AuthenticodeSignature $driver[0].FullName).Status -ne 'Valid'){throw 'De
 $source=Join-Path $cache 'usbpcap-src-incl-pdb-1.5.4.0.7z'
 if(!(Test-Path $source)){Invoke-WebRequest -UseBasicParsing 'https://github.com/desowin/usbpcap/releases/download/1.5.4.0/usbpcap-src-incl-pdb-1.5.4.0.7z' -OutFile $source}
 $dist=Join-Path $root 'dist';New-Item -ItemType Directory $dist -Force | Out-Null
-$package=Join-Path $dist ('GlideMouse-0.1.0-alpha-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+$package=Join-Path $dist (('GlideMouse-'+$Version+'-')+[guid]::NewGuid().ToString('N').Substring(0,8))
 New-Item -ItemType Directory $package,(Join-Path $package 'bin'),(Join-Path $package 'installer'),(Join-Path $package 'dependencies'),(Join-Path $package 'corresponding-source') | Out-Null
 foreach($name in 'IslandMagicInput.exe','IslandMagicUsbBridge.exe','GlideMouseConnection.exe','GlideMouseDriverSetup.exe'){Copy-Item -LiteralPath (Join-Path $BinaryDir $name) -Destination (Join-Path $package 'bin')}
 Copy-Item -LiteralPath (Join-Path $BinaryDir 'GlideMouseSetup.exe') -Destination $package
@@ -26,9 +26,9 @@ Copy-Item -LiteralPath (Join-Path $root "assets\MagicMouse-animation.png") -Dest
 Copy-Item -LiteralPath (Join-Path $root "assets\MODEL-PROVENANCE.md") -Destination $package
 Copy-Item -LiteralPath $driver[0].FullName -Destination (Join-Path $package 'dependencies\USBPcap.sys')
 Copy-Item -LiteralPath $source -Destination (Join-Path $package 'corresponding-source')
-foreach($name in 'README.md','LICENSE','THIRD_PARTY_NOTICES.md'){Copy-Item -LiteralPath (Join-Path $root $name) -Destination $package}
+foreach($name in 'README.md','RELEASE-NOTES.md','LICENSE','THIRD_PARTY_NOTICES.md'){Copy-Item -LiteralPath (Join-Path $root $name) -Destination $package}
 $checksums=foreach($file in Get-ChildItem -LiteralPath $package -File -Recurse | Sort-Object FullName){(Get-FileHash $file.FullName).Hash.ToLowerInvariant()+'  '+$file.FullName.Substring($package.Length+1).Replace('\','/')}
 $checksums | Set-Content -LiteralPath (Join-Path $package 'SHA256SUMS.txt') -Encoding ASCII
-$zip=Join-Path $dist 'GlideMouse-0.1.0-alpha-win-x64.zip'
+$zip=Join-Path $dist ('GlideMouse-'+$Version+'-win-x64.zip')
 Compress-Archive -Path (Join-Path $package '*') -DestinationPath $zip -Force
 Write-Output $zip

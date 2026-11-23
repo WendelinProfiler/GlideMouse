@@ -11,10 +11,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build, test and package
         shell: pwsh
-        run: ./Build.ps1 -Package
+        run: ./Build.ps1 -Package -Version ($env:GITHUB_REF_NAME -replace '^v','')
       - name: Publish prerelease
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME dist/GlideMouse-0.1.0-alpha-win-x64.zip --prerelease --title "GlideMouse $env:GITHUB_REF_NAME" --notes "First community preview. Read README requirements before installing. Apple driver not bundled. Generalized clean-machine installation and wider adapter compatibility still need testing."
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Output "Release already exists; leaving its verified assets unchanged."; exit 0 }
+          $version=$env:GITHUB_REF_NAME -replace '^v',''
+          gh release create $env:GITHUB_REF_NAME "dist/GlideMouse-$version-win-x64.zip" --prerelease --title "GlideMouse $env:GITHUB_REF_NAME" --notes-file RELEASE-NOTES.md

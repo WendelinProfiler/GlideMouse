@@ -30,6 +30,15 @@ if($state.ApplePackageInstalled){
 }
 if ($state.HubAdded) { Remove-OwnedFilter $state.Hub UpperFilters USBPcap }
 if ($state.MouseAdded) { Remove-OwnedFilter $state.Mouse LowerFilters applewirelessmouse }
+foreach($change in @($state.NativeMouseFilterChanges)) {
+    if(!$change){continue}
+    $suffix=[regex]::Match($state.Mouse,'[0-9A-Fa-f]{12}_C[0-9A-Fa-f]+$').Value
+    if(!$suffix -or $change.Instance -notmatch '^BTHENUM\\\{00001124-.*PID&0323\\' -or !$change.Instance.EndsWith($suffix,[StringComparison]::OrdinalIgnoreCase)){throw 'Invalid native mouse filter restore entry.'}
+    if($change.HadAppleFilter){
+        & (Join-Path $target 'GlideMouseDriverSetup.exe') $change.Instance --restore-native-filter
+        if($LASTEXITCODE){throw 'Could not restore the native mouse filter. Journal retained for recovery.'}
+    }
+}
 foreach ($change in $state.ScrollChanges) {
     if ($change.Instance -notmatch '^HID\\[^\r\n]+$' -or $change.Name -notin @('FlipFlopWheel','FlipFlopHScroll')) {throw 'Invalid scroll restore entry.'}
     $key='HKLM:\SYSTEM\CurrentControlSet\Enum\'+$change.Instance+'\Device Parameters'

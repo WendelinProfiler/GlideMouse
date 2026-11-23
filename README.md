@@ -12,6 +12,10 @@ Reconnect, momentum, touch-to-stop and gestures have also been tested on that sy
 The generalized installer has not yet had a clean-machine installation test.
 Other adapters and sleep/wake behaviour need broader community testing.
 
+## Latest patch
+
+[0.1.1 alpha](https://github.com/WendelinProfiler/GlideMouse/releases/tag/v0.1.1-alpha.1) improves reconnection and coexistence with Podglow. Read the [release notes](RELEASE-NOTES.md) for the update steps and test limits.
+
 ## What you get
 
 - Natural or standard scrolling, selected for this mouse only.

@@ -43,16 +43,18 @@ inline Gdiplus::Color BatteryColor(const State& state){
 }
 inline void Draw(Gdiplus::Bitmap& bitmap,const State& state){
  using namespace Gdiplus;Graphics g(&bitmap);g.SetSmoothingMode(SmoothingModeAntiAlias);g.Clear(Color(0,0,0,0));
- GraphicsPath mouse;mouse.StartFigure();mouse.AddBezier(64.f,7.f,39.f,7.f,30.f,19.f,30.f,43.f);mouse.AddBezier(30.f,43.f,30.f,64.f,33.f,90.f,39.f,104.f);mouse.AddBezier(39.f,104.f,44.f,117.f,53.f,121.f,64.f,121.f);mouse.AddBezier(64.f,121.f,75.f,121.f,84.f,117.f,89.f,104.f);mouse.AddBezier(89.f,104.f,95.f,90.f,98.f,64.f,98.f,43.f);mouse.AddBezier(98.f,43.f,98.f,19.f,89.f,7.f,64.f,7.f);mouse.CloseFigure();
- LinearGradientBrush body(Point(30,7),Point(98,121),state.connected?Color(100,0,174,255):Color(55,145,151,160),Color(8,120,160,200));g.FillPath(&body,&mouse);
- Pen outline(state.connected?Color(255,0,174,255):Color(255,145,151,160),9.f);outline.SetLineJoin(LineJoinRound);g.DrawPath(&outline,&mouse);
+ GraphicsPath mouse;mouse.StartFigure();mouse.AddBezier(64.f,4.f,39.f,4.f,33.f,13.f,32.f,36.f);mouse.AddBezier(32.f,36.f,30.f,59.f,30.f,91.f,34.f,108.f);mouse.AddBezier(34.f,108.f,37.f,120.f,47.f,124.f,64.f,124.f);mouse.AddBezier(64.f,124.f,81.f,124.f,91.f,120.f,94.f,108.f);mouse.AddBezier(94.f,108.f,98.f,91.f,98.f,59.f,96.f,36.f);mouse.AddBezier(96.f,36.f,95.f,13.f,89.f,4.f,64.f,4.f);mouse.CloseFigure();
+ SolidBrush body(state.connected?Color(255,10,132,255):Color(255,145,145,152));g.FillPath(&body,&mouse);
+ // Small transparent Apple silhouette, matching the front view in the reference.
+ g.SetCompositingMode(CompositingModeSourceCopy);SolidBrush clear(Color(0,0,0,0));GraphicsPath apple;apple.StartFigure();apple.AddBezier(64,94,60,91,57,94,58,98);apple.AddBezier(58,98,58,101,60,105,62,105);apple.AddBezier(62,105,64,103,65,104,67,105);apple.AddBezier(67,105,69,104,70,101,70,100);apple.AddBezier(70,100,66,99,66,96,70,95);apple.AddBezier(70,95,68,92,66,93,64,94);apple.CloseFigure();g.FillPath(&clear,&apple);apple.Reset();apple.AddBezier(64,92,64,89,67,88,68,88);apple.AddBezier(68,88,68,91,66,93,64,92);apple.CloseFigure();g.FillPath(&clear,&apple);
 }
+
 
 inline void Update(HWND window,bool force=false){
  State state=Query();GlidePopup::connected=state.connected;GlidePopup::battery=state.battery;GlidePopup::fresh=state.fresh;bool popup=IsWindowVisible(FindWindowW(L"GlideMousePopup",nullptr))||IsWindowVisible(FindWindowW(L"WindhawkMacIslandDockPanel",L"Island Magic Mouse"));if(!force&&added&&popup==previousPopup&&state.connected==previous.connected&&state.battery==previous.battery&&state.fresh==previous.fresh)return;
  Gdiplus::Bitmap bitmap(128,128,PixelFormat32bppARGB);Draw(bitmap,state);HICON next=nullptr;if(bitmap.GetHICON(&next)!=Gdiplus::Ok||!next)return;
  notification.cbSize=sizeof(notification);notification.hWnd=window;notification.uID=1;notification.uFlags=NIF_ICON|NIF_TIP|NIF_MESSAGE;notification.uCallbackMessage=callback;notification.hIcon=next;
- std::wstring tip=L"Magic Mouse";if(state.connected){BLUETOOTH_DEVICE_INFO device{};device.dwSize=sizeof(device);device.Address.ullLong=wcstoull(Read(L"Address",L"0").c_str(),nullptr,16);if(BluetoothGetDeviceInfo(nullptr,&device)==ERROR_SUCCESS&&device.szName[0])tip+=L"\n"+std::wstring(device.szName);tip+=state.battery>=0?L"\nBattery: "+std::to_wstring(state.battery)+L" %"+(state.fresh?L"":L" (last known)"):L"\nBattery: unavailable";}else tip+=L"\nDisconnected";wcsncpy_s(notification.szTip,popup?L"Magic Mouse":tip.c_str(),_TRUNCATE);
+ std::wstring tip=L"Magic Mouse";if(state.connected){BLUETOOTH_DEVICE_INFO device{};device.dwSize=sizeof(device);device.Address.ullLong=wcstoull(Read(L"Address",L"0").c_str(),nullptr,16);if(BluetoothGetDeviceInfo(nullptr,&device)==ERROR_SUCCESS&&device.szName[0])tip+=L"\n"+std::wstring(device.szName);tip+=state.battery>=0?L"\nBattery: "+std::to_wstring(state.battery)+L" %"+(state.fresh?L"":L" (last known)"):L"\nBattery: unavailable";}else tip+=L"\nDisconnected\nClick to connect";wcsncpy_s(notification.szTip,popup?L"Magic Mouse":tip.c_str(),_TRUNCATE);
  bool success=Shell_NotifyIconW(added?NIM_MODIFY:NIM_ADD,&notification)!=FALSE;
  if(success){if(!added){notification.uVersion=NOTIFYICON_VERSION_4;Shell_NotifyIconW(NIM_SETVERSION,&notification);}added=true;previous=state;previousPopup=popup;if(icon)DestroyIcon(icon);icon=next;}else DestroyIcon(next);
 }
@@ -68,11 +70,19 @@ inline void OpenWidget(POINT anchor){
 }
 
 inline void OpenWidget(){POINT anchor{};GetCursorPos(&anchor);OpenWidget(anchor);}
+inline ULONGLONG quickConnectAt=0;
+inline void ClickGlyph(POINT anchor){
+ auto now=GetTickCount64();if(now-quickConnectAt<1500)return;
+ if(Query().connected){OpenWidget(anchor);return;}
+ auto started=wcstoull(Read(L"ConnectionStarted",L"0").c_str(),nullptr,10);if(Read(L"ConnectionBusy")==L"1"&&now>=started&&now-started<15000)return;
+ wchar_t module[MAX_PATH];if(!GetModuleFileNameW(nullptr,module,MAX_PATH))return;std::wstring path=module;path=path.substr(0,path.find_last_of(L"\\")+1)+L"GlideMouseConnection.exe";
+ quickConnectAt=now;ShellExecuteW(nullptr,L"open",path.c_str(),L"--connect",nullptr,SW_HIDE);
+}
 inline LRESULT CALLBACK WindowProc(HWND window,UINT msg,WPARAM wp,LPARAM lp){
  if(msg==taskbarCreated){added=false;Update(window,true);return 0;}
  if(msg==WM_CREATE){SetTimer(window,1,2000,nullptr);Update(window,true);return 0;}
  if(msg==WM_TIMER){Update(window);return 0;}if(msg==WM_APP+32){Update(window,true);return 0;}
- if(msg==callback){UINT action=LOWORD(lp);if(action==NIN_SELECT||action==NIN_KEYSELECT){POINT anchor{short(LOWORD(wp)),short(HIWORD(wp))};if(action==NIN_KEYSELECT)GetCursorPos(&anchor);OpenWidget(anchor);return 0;}if(action==WM_CONTEXTMENU||action==WM_RBUTTONUP){POINT point;GetCursorPos(&point);HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Mouse settings");bool tap=Read(L"TapToClick",L"0")==L"1";AppendMenuW(menu,MF_STRING|(tap?MF_CHECKED:0),2,L"Tap to click");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,3,L"Quit GlideMouse");SetForegroundWindow(window);int command=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,point.x,point.y,0,window,nullptr);DestroyMenu(menu);if(command==1)OpenWidget();else if(command==2)WritePrivateProfileStringW(L"Mouse",L"TapToClick",tap?L"0":L"1",config.c_str());else if(command==3)SetEvent(stopEvent);PostMessageW(window,WM_NULL,0,0);return 0;}}
+ if(msg==callback){UINT action=LOWORD(lp);if(action==NIN_SELECT||action==NIN_KEYSELECT){POINT anchor{short(LOWORD(wp)),short(HIWORD(wp))};if(action==NIN_KEYSELECT)GetCursorPos(&anchor);ClickGlyph(anchor);return 0;}if(action==WM_CONTEXTMENU||action==WM_RBUTTONUP){POINT point;GetCursorPos(&point);HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Mouse settings");bool tap=Read(L"TapToClick",L"0")==L"1";AppendMenuW(menu,MF_STRING|(tap?MF_CHECKED:0),2,L"Tap to click");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,3,L"Quit GlideMouse");SetForegroundWindow(window);int command=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,point.x,point.y,0,window,nullptr);DestroyMenu(menu);if(command==1)OpenWidget();else if(command==2)WritePrivateProfileStringW(L"Mouse",L"TapToClick",tap?L"0":L"1",config.c_str());else if(command==3)SetEvent(stopEvent);PostMessageW(window,WM_NULL,0,0);return 0;}}
  if(msg==WM_DESTROY){GlidePopup::Destroy();Shell_NotifyIconW(NIM_DELETE,&notification);added=false;if(icon){DestroyIcon(icon);icon=nullptr;}return 0;}
  return DefWindowProcW(window,msg,wp,lp);
 }
