@@ -37,10 +37,12 @@ inline State Query(unsigned long long target){
 // adapter reset, test-signing change, global class filter or Windows reboot.
 inline DWORD RestoreRegistration(unsigned long long target){
  auto state=Query(target);if(state.instance.empty())return ERROR_NOT_FOUND;if(state.active)return ERROR_SUCCESS;
- HDEVINFO set=SetupDiCreateDeviceInfoList(nullptr,nullptr);if(set==INVALID_HANDLE_VALUE)return GetLastError();SP_DEVINFO_DATA info{sizeof(info)};DWORD result=ERROR_SUCCESS;
+ HDEVINFO set=SetupDiCreateDeviceInfoList(nullptr,nullptr);if(set==INVALID_HANDLE_VALUE)return GetLastError();SP_DEVINFO_DATA info{};info.cbSize=sizeof(info);DWORD result=ERROR_SUCCESS;
  if(!SetupDiOpenDeviceInfoW(set,state.instance.c_str(),nullptr,0,&info)){result=GetLastError();SetupDiDestroyDeviceInfoList(set);return result;}
  if(!state.registered){DWORD type=0,size=0;SetupDiGetDeviceRegistryPropertyW(set,&info,SPDRP_LOWERFILTERS,&type,nullptr,0,&size);std::vector<wchar_t> old(size/sizeof(wchar_t)+2);if(size&&!SetupDiGetDeviceRegistryPropertyW(set,&info,SPDRP_LOWERFILTERS,&type,reinterpret_cast<PBYTE>(old.data()),DWORD(old.size()*sizeof(wchar_t)),nullptr)){result=GetLastError();}else{std::vector<wchar_t> filters;for(auto p=old.data();*p;p+=wcslen(p)+1)filters.insert(filters.end(),p,p+wcslen(p)+1);constexpr wchar_t apple[]=L"applewirelessmouse";filters.insert(filters.end(),apple,apple+_countof(apple));filters.push_back(0);if(!SetupDiSetDeviceRegistryPropertyW(set,&info,SPDRP_LOWERFILTERS,reinterpret_cast<PBYTE>(filters.data()),DWORD(filters.size()*sizeof(wchar_t))))result=GetLastError();}}
- if(result==ERROR_SUCCESS&&!SetupDiRestartDevices(set,&info))result=GetLastError();SetupDiDestroyDeviceInfoList(set);if(result!=ERROR_SUCCESS)return result;
- return Query(target).active?ERROR_SUCCESS:ERROR_SUCCESS_REBOOT_REQUIRED;
+ // Re-pairing must not destroy/recreate this node or unload its working filter.
+ // Initial package binding belongs to Setup; normal reconnects only retain it.
+ SetupDiDestroyDeviceInfoList(set);if(result!=ERROR_SUCCESS)return result;
+ return Query(target).active?ERROR_SUCCESS:ERROR_DEVICE_NOT_AVAILABLE;
 }
 }

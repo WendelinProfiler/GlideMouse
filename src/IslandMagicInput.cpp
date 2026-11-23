@@ -12,6 +12,7 @@
 #include "MagicMouseTray.h"
 #include "MouseUsbShared.h"
 #include "MouseSettings.h"
+#include "DirectMousePointer.h"
 #include "MagicMouseEngine.h"
 static unsigned long long eventCounts[9]{},sendFailures=0,frameCount=0,sessionStarts=0,readRetries=0,statusRetries=0;static DWORD lastInputError=0;static double maxLoopGapMs=0;static std::wstring statusPath,settingsPath;static bool tapMode=false,signedUsb=false;
 static void WriteStatus(const char* mode,bool coasting=false){
@@ -19,6 +20,13 @@ static void WriteStatus(const char* mode,bool coasting=false){
  char json[1024];int n=snprintf(json,sizeof(json),"{\"mode\":\"%s\",\"pid\":%lu,\"frames\":%llu,\"coasting\":%s,\"passiveDriver\":true,\"transport\":\"%s\",\"maxLoopGapMs\":%.3f,\"wheel\":%llu,\"back\":%llu,\"forward\":%llu,\"desktopPrevious\":%llu,\"desktopNext\":%llu,\"zoom\":%llu,\"overview\":%llu,\"leftTap\":%llu,\"rightTap\":%llu,\"tapToClick\":%s,\"sendFailures\":%llu,\"lastInputError\":%lu,\"sessionStarts\":%llu,\"readRetries\":%llu,\"statusRetries\":%llu}",mode,(unsigned long)GetCurrentProcessId(),frameCount,coasting?"true":"false","signed-usb",maxLoopGapMs,eventCounts[0],eventCounts[1],eventCounts[2],eventCounts[3],eventCounts[4],eventCounts[5],eventCounts[6],eventCounts[7],eventCounts[8],tapMode?"true":"false",sendFailures,(unsigned long)lastInputError,sessionStarts,readRetries,statusRetries);DWORD wrote=0;if(n>0&&n<int(sizeof(json)))WriteFile(f,json,DWORD(n),&wrote,nullptr);CloseHandle(f);
 }
 static void Inject(UINT count,INPUT* input){if(SendInput(count,input,sizeof(INPUT))!=count){sendFailures++;lastInputError=GetLastError();}}
+static void EmitPointer(const DirectMousePointer::Delta& delta){
+ if(!delta.Any())return;INPUT input{};input.type=INPUT_MOUSE;input.mi.dwExtraInfo=0x494d5431;
+ input.mi.dx=delta.x;input.mi.dy=delta.y;if(delta.x||delta.y)input.mi.dwFlags|=MOUSEEVENTF_MOVE;
+ if(delta.down&1)input.mi.dwFlags|=MOUSEEVENTF_LEFTDOWN;if(delta.up&1)input.mi.dwFlags|=MOUSEEVENTF_LEFTUP;
+ if(delta.down&2)input.mi.dwFlags|=MOUSEEVENTF_RIGHTDOWN;if(delta.up&2)input.mi.dwFlags|=MOUSEEVENTF_RIGHTUP;
+ Inject(1,&input);
+}
 static void KeyChord(std::initializer_list<WORD> keys){
  for(WORD modifier:{WORD(VK_SHIFT),WORD(VK_CONTROL),WORD(VK_MENU),WORD(VK_LWIN),WORD(VK_RWIN)})if(GetAsyncKeyState(modifier)&0x8000)return;
  std::vector<INPUT> input;for(WORD key:keys){INPUT i{};i.type=INPUT_KEYBOARD;i.ki.wVk=key;input.push_back(i);}
@@ -52,15 +60,16 @@ static int RunSession(bool observe,HANDLE stop){
  // Apple's pointer, mechanical buttons and finger-wheel path stay untouched.
  auto preferred=MouseSettings::Read(settingsPath,L"PreferredNatural",L"1");auto native=MouseSettings::NativeNatural(settingsPath);bool wanted=preferred!=L"0";
  if(!native||*native!=wanted)MouseSettings::Direction(nullptr,wanted);
+ bool directPointer=GetPrivateProfileIntW(L"Mouse",L"DirectPointer",0,settingsPath.c_str())!=0;DirectMousePointer::State pointer;
  sessionStarts++;MagicMouse::Engine engine;tapMode=GetPrivateProfileIntW(L"Mouse",L"TapToClick",0,settingsPath.c_str())!=0;engine.settings.tapToClick=tapMode;int momentumStrength=std::clamp<int>(GetPrivateProfileIntW(L"Mouse",L"Momentum",38,settingsPath.c_str()),0,100);engine.settings.momentum=momentumStrength>0;engine.settings.decay=.08+.52*momentumStrength/100.;engine.settings.natural=MouseSettings::Natural(settingsPath);bool waitForLift=false;IMT_READ read{IMT_VERSION,0,status.frames};double remainderX=0,remainderY=0;LARGE_INTEGER last{},now{};QueryPerformanceCounter(&last);ULONGLONG heartbeat=GetTickCount64(),start=heartbeat,lastStatus=0;ULONGLONG lastHealthyRead=heartbeat,lastHealthyStatus=heartbeat;unsigned disconnects=0;WriteStatus(observe?"observe":"active");
  while(WaitForSingleObject(stop,0)==WAIT_TIMEOUT&&GetTickCount64()-start< (observe?30000ULL:UINT64_MAX)){
   IMT_BATCH batch{};
   if(!readQuery(read,batch,size)){readRetries++;if(GetTickCount64()-lastHealthyRead>500)break;Sleep(2);continue;}lastHealthyRead=GetTickCount64();
   if(batch.version!=IMT_VERSION||batch.count>IMT_BATCH_SIZE||size!=offsetof(IMT_BATCH,records)+batch.count*sizeof(IMT_RECORD))break;
-  if(batch.missed){waitForLift=true;engine.Reset();remainderX=remainderY=0;}
+  if(batch.missed){if(directPointer&&!observe)EmitPointer(pointer.Release());waitForLift=true;engine.Reset();remainderX=remainderY=0;}
   for(unsigned i=0;i<batch.count;i++){
-   auto& record=batch.records[i];if(record.sequence<=read.afterSequence||record.length>IMT_MAX_REPORT)continue;read.afterSequence=record.sequence;
-   MagicMouse::Frame frame;if(MagicMouse::Parse(record.bytes,record.length,double(record.qpc)/status.qpcFrequency,frame)){frameCount++;if(waitForLift){if(!frame.hasContacts||!frame.contacts.empty())continue;waitForLift=false;}auto events=engine.Feed(frame);std::erase_if(events,[](const auto& event){return event.action==MagicMouse::Action::Wheel;});if(!observe)Emit(events,remainderX,remainderY);}
+   auto& record=batch.records[i];if(record.sequence<=read.afterSequence||record.length>IMT_MAX_REPORT)continue;read.afterSequence=record.sequence;if(directPointer&&!status.devices)continue;
+   MagicMouse::Frame frame;if(MagicMouse::Parse(record.bytes,record.length,double(record.qpc)/status.qpcFrequency,frame)){frameCount++;if(directPointer&&!observe)EmitPointer(pointer.Feed(frame));if(waitForLift){if(!frame.hasContacts||!frame.contacts.empty())continue;waitForLift=false;}auto events=engine.Feed(frame);if(!directPointer)std::erase_if(events,[](const auto& event){return event.action==MagicMouse::Action::Wheel;});if(!observe)Emit(events,remainderX,remainderY);}
   }
   QueryPerformanceCounter(&now);maxLoopGapMs=std::max(maxLoopGapMs,1000.*double(now.QuadPart-last.QuadPart)/status.qpcFrequency);if(!observe)Emit(engine.Tick(double(now.QuadPart-last.QuadPart)/status.qpcFrequency),remainderX,remainderY);last=now;
   if(GetTickCount64()-heartbeat>=80){
@@ -68,12 +77,13 @@ static int RunSession(bool observe,HANDLE stop){
    if(!statusQuery(nextStatus,size)){statusRetries++;if(GetTickCount64()-lastHealthyStatus>500)break;heartbeat=GetTickCount64();continue;}
    if(nextStatus.version!=IMT_VERSION||nextStatus.qpcFrequency<=0)break;
    status=nextStatus;lastHealthyStatus=GetTickCount64();
-   if(!status.devices){engine.Reset();remainderX=remainderY=0;if(++disconnects>100)break;}else disconnects=0;
+   if(!status.devices){if(directPointer&&!observe)EmitPointer(pointer.Release());engine.Reset();remainderX=remainderY=0;if(++disconnects>100)break;}else disconnects=0;
    heartbeat=GetTickCount64();
   }
   if(GetTickCount64()-lastStatus>=500){momentumStrength=std::clamp<int>(GetPrivateProfileIntW(L"Mouse",L"Momentum",38,settingsPath.c_str()),0,100);engine.settings.momentum=momentumStrength>0;engine.settings.decay=.08+.52*momentumStrength/100.;bool actualNatural=MouseSettings::Natural(settingsPath);if(engine.settings.natural!=actualNatural){engine.Reset();engine.settings.natural=actualNatural;engine.settings.tapToClick=tapMode;remainderX=remainderY=0;waitForLift=true;}bool configured=GetPrivateProfileIntW(L"Mouse",L"TapToClick",0,settingsPath.c_str())!=0;if(configured!=tapMode){tapMode=configured;engine.Reset();engine.settings.tapToClick=tapMode;remainderX=remainderY=0;waitForLift=true;}WriteStatus(observe?"observe":"active",engine.Coasting());lastStatus=GetTickCount64();}
   Sleep(8);
  }
+ if(directPointer&&!observe)EmitPointer(pointer.Release());
  // There is no takeover lease or modified native report in this input path.
  return 0;
 }

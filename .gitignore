@@ -1,5 +1,7 @@
 /build/
 /dist/
+**/bin/
+**/obj/
 /.vs/
 *.user
 *.log
@@ -11,3 +13,11 @@
 *.pcap*
 *.7z
 *.zip
+*.pfx
+*.p12
+*.key
+*.before-*
+settings.json
+guard-ready.json
+release-token
+pending-mac-bond

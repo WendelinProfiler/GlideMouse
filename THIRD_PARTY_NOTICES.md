@@ -37,3 +37,13 @@ Windhawk is optional. This repository does not bundle or replace the Mac Island
 & Dock mod (GPL-3.0). It can signal an existing compatible native mouse panel,
 and otherwise opens its standalone Windows tray popup. No Windhawk installation
 is necessary for the Windows tray experience.
+
+## Optional macOS companion
+
+The backend is a modified [blueutil 2.14.0](https://github.com/toy/blueutil), originally
+by Frederik Seiffert, maintained by Ivan Kuchin and contributors. Its MIT license
+is retained in experimental/HostSwitch/vendor/blueutil/LICENSE.txt and in the Mac
+app as blueutil-LICENSE.txt. Local changes are documented beside the source.
+
+The native menu uses system SF Symbol APIs, not bundled extracted Apple glyphs.
+The managed coordinator includes .NET and its runtime third-party notices.

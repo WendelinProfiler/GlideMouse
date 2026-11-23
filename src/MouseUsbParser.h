@@ -82,6 +82,7 @@ class Parser {
  public:
  Counts counts;
  Parser(uint64_t target,uint16_t device,std::function<void(const uint8_t*,size_t,double)> callback={}):address(target),usbDevice(device),receive(callback){}
+ uint16_t CurrentHandle()const{return handle;}
  bool Bound()const{return handle!=0xffff&&interruptCid!=0;}
  void SetProof(const std::array<uint8_t,16>& nonce){proof=nonce;proofSet=true;}
  bool Feed(const uint8_t* p,size_t n){

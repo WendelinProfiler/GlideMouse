@@ -10,7 +10,7 @@
 #include <algorithm>
 static int NativeFilter(const std::wstring& id,bool restore){
  DEVINST dev=0;if(!restore&&CM_Locate_DevNodeW(&dev,const_cast<wchar_t*>(id.c_str()),CM_LOCATE_DEVNODE_NORMAL)==CR_SUCCESS)return ERROR_BUSY;
- HDEVINFO set=SetupDiCreateDeviceInfoList(nullptr,nullptr);if(set==INVALID_HANDLE_VALUE)return GetLastError();SP_DEVINFO_DATA node{sizeof(node)};
+ HDEVINFO set=SetupDiCreateDeviceInfoList(nullptr,nullptr);if(set==INVALID_HANDLE_VALUE)return GetLastError();SP_DEVINFO_DATA node{};node.cbSize=sizeof(node);
  if(!SetupDiOpenDeviceInfoW(set,id.c_str(),nullptr,0,&node)){DWORD error=GetLastError();SetupDiDestroyDeviceInfoList(set);return error;}
  DWORD type=0,size=0;SetupDiGetDeviceRegistryPropertyW(set,&node,SPDRP_LOWERFILTERS,&type,nullptr,0,&size);std::vector<wchar_t> old(size/2+2),next;
  if(size&&!SetupDiGetDeviceRegistryPropertyW(set,&node,SPDRP_LOWERFILTERS,&type,reinterpret_cast<BYTE*>(old.data()),DWORD(old.size()*2),nullptr)){DWORD error=GetLastError();SetupDiDestroyDeviceInfoList(set);return error;}

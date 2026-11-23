@@ -1,10 +1,10 @@
-param([string]$Compiler,[switch]$Package,[string]$Version='0.1.1-alpha.1')
+param([string]$Compiler,[switch]$Package,[string]$Version='0.2.0-alpha.1')
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
 if ($Compiler) {
     # LLVM-MinGW is optional; MSVC + CMake is the default documented toolchain.
     $out=Join-Path $root 'build';New-Item -ItemType Directory $out -Force | Out-Null
-    $common=@('-target','x86_64-w64-mingw32','-static','-std=c++23','-O1','-Wall','-Wextra','-Werror')
+    $common=@('-target','x86_64-w64-mingw32','-static','-std=c++23','-O1','-Wall','-Wextra','-Werror',"-ffile-prefix-map=$root=/_/source")
     $targets=@(
         @{Name='IslandMagicInput';Gui=$true;Libs=@('-luser32','-lshell32','-lgdiplus','-lbthprops','-lcfgmgr32','-ldwmapi','-lshcore','-ladvapi32','-lcfgmgr32')},
         @{Name='IslandMagicUsbBridge';Gui=$false;Libs=@('-ladvapi32','-lws2_32','-lole32','-lbthprops','-lcfgmgr32','-lsetupapi')},
@@ -12,7 +12,7 @@ if ($Compiler) {
         @{Name='GlideMouseDriverSetup';Gui=$false;Libs=@('-lsetupapi','-lcfgmgr32')}
     )
     foreach($target in $targets){$extra=@('-municode');if($target.Gui){$extra+='-mwindows'};& $Compiler @common @extra (Join-Path $root ('src\'+$target.Name+'.cpp')) -o (Join-Path $out ($target.Name+'.exe')) @($target.Libs);if($LASTEXITCODE){throw ('Build failed: '+$target.Name)}}
-    foreach($test in 'Engine','TapModes','MouseUsbParser','Timing','ConnectionIntent','Popup','WindowsSettings'){
+    foreach($test in 'Engine','TapModes','MouseUsbParser','Timing','ConnectionIntent','DirectMousePointer','Popup','WindowsSettings'){
         $libraries=if($test -eq 'Popup'){@('-lgdiplus','-lshell32','-ldwmapi','-lshcore','-ladvapi32','-lcfgmgr32')}elseif($test -eq 'WindowsSettings'){@('-ladvapi32','-lshell32','-lcfgmgr32')}else{@()}
         $exe=Join-Path $out ('Test'+$test+'.exe');& $Compiler @common (Join-Path $root ('tests\Test'+$test+'.cpp')) -o $exe @libraries;if($LASTEXITCODE){throw "Test build failed: $test"};& $exe;if($LASTEXITCODE){throw "Test failed: $test"}
     }

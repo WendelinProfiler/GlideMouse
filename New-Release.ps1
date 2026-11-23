@@ -1,4 +1,4 @@
-param([string]$BinaryDir=(Join-Path $PSScriptRoot 'build\Release'),[string]$Version='0.1.1-alpha.1')
+param([string]$BinaryDir=(Join-Path $PSScriptRoot 'build\Release'),[string]$Version='0.2.0-alpha.1')
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot;$cache=Join-Path $root 'build\dependency-cache'
 New-Item -ItemType Directory $cache -Force | Out-Null

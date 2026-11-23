@@ -14,7 +14,7 @@ Other adapters and sleep/wake behaviour need broader community testing.
 
 ## Latest patch
 
-[0.1.1 alpha](https://github.com/WendelinProfiler/GlideMouse/releases/tag/v0.1.1-alpha.1) improves reconnection and coexistence with Podglow. Read the [release notes](RELEASE-NOTES.md) for the update steps and test limits.
+[0.2.0 alpha](https://github.com/WendelinProfiler/GlideMouse/releases/tag/v0.2.0-alpha.1) adds an optional Mac companion and matching Windows host-switch add-on, plus direct input and battery support with Podglow. See [Mac companion setup](docs/MAC-COMPANION.md). Read the [release notes](RELEASE-NOTES.md) for the update steps and test limits.
 
 ## What you get
 
